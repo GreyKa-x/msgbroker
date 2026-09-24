@@ -6,7 +6,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title or "msgbroker" }}</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260922-equal">
+  <link rel="stylesheet" href="/static/styles.css?v=20260924-sections">
   <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/ace.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/mode-json.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/theme-chrome.js" defer></script>
@@ -21,21 +21,28 @@
   {% endif %}
   <header class="topbar">
     <a class="brand" href="/?environment={{ active_environment }}">msgbroker</a>
-    <nav>
-      <span class="environment-switch" aria-label="Environment">
-        {% for environment in ('prod', 'test') %}
-        <a class="button {{ 'primary' if environment == active_environment else '' }}" href="{% if tab == 'messages' %}/messages{% elif tab == 'topics' %}/topics{% elif request.url.path == '/jobs/new' %}/jobs/new{% else %}/{% endif %}?environment={{ environment }}" {% if environment == active_environment %}aria-current="page"{% endif %}>{{ environment }}</a>
-        {% endfor %}
-      </span>
-      <a class="button primary" href="/jobs/new?environment={{ active_environment }}">New Job</a>
+    <nav class="section-tabs" aria-label="消息板块">
+      <a class="section-tab" href="/?environment={{ active_environment }}" {% if tab != 'messages' and tab != 'topics' %}aria-current="page"{% endif %}>周期消息</a>
+      <a class="section-tab" href="/messages?environment={{ active_environment }}" {% if tab == 'messages' or tab == 'topics' %}aria-current="page"{% endif %}>定时消息</a>
     </nav>
   </header>
   <main class="page">
-    <nav class="broker-tabs" aria-label="Message type">
-      <a class="button {{ 'primary' if tab != 'messages' and tab != 'topics' else '' }}" href="/?environment={{ active_environment }}">周期消息</a>
-      <a class="button {{ 'primary' if tab == 'messages' else '' }}" href="/messages?environment={{ active_environment }}">定时消息</a>
-      <a class="button {{ 'primary' if tab == 'topics' else '' }}" href="/topics?environment={{ active_environment }}">Topic 配置</a>
+    <div class="section-toolbar">
+      <nav class="environment-switch" aria-label="Environment">
+        {% for environment in ('prod', 'test') %}
+        <a class="button {{ 'primary' if environment == active_environment else '' }}" href="{% if tab == 'messages' %}/messages{% elif tab == 'topics' %}/topics{% elif request.url.path == '/jobs/new' %}/jobs/new{% else %}/{% endif %}?environment={{ environment }}" {% if environment == active_environment %}aria-current="page"{% endif %}>{{ environment }}</a>
+        {% endfor %}
+      </nav>
+      {% if tab != 'messages' and tab != 'topics' %}
+      <a class="button primary" href="/jobs/new?environment={{ active_environment }}">New Job</a>
+      {% endif %}
+    </div>
+    {% if tab == 'messages' or tab == 'topics' %}
+    <nav class="broker-tabs" aria-label="定时消息管理">
+      <a class="subsection-tab" href="/messages?environment={{ active_environment }}" {% if tab == 'messages' %}aria-current="page"{% endif %}>消息</a>
+      <a class="subsection-tab" href="/topics?environment={{ active_environment }}" {% if tab == 'topics' %}aria-current="page"{% endif %}>Topic 配置</a>
     </nav>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
 </body>
