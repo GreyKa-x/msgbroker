@@ -321,10 +321,21 @@ func (s *Server) managedAPI(w http.ResponseWriter, r *http.Request, p []string) 
 	}
 	http.NotFound(w, r)
 }
+
+// Match Python datetime display in the existing periodic pages.
+func htmlValue(v any) any {
+	if t, ok := v.(time.Time); ok {
+		if t.Nanosecond() == 0 {
+			return t.Format("2006-01-02 15:04:05")
+		}
+		return t.Format("2006-01-02 15:04:05.000000")
+	}
+	return v
+}
 func htmlJob(j broker.Row) broker.Row {
 	out := broker.Row{}
 	for k, v := range j {
-		out[k] = v
+		out[k] = htmlValue(v)
 	}
 	out["enabled"] = broker.Bool(j["enabled"])
 	out["managed_paused"] = broker.Bool(j["managed_paused"])
@@ -334,7 +345,7 @@ func htmlJob(j broker.Row) broker.Row {
 func htmlExecution(r broker.Row) broker.Row {
 	out := broker.Row{}
 	for k, v := range r {
-		out[k] = v
+		out[k] = htmlValue(v)
 	}
 	out["status"] = map[string]any{"value": r["status"]}
 	return out

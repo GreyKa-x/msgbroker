@@ -85,6 +85,7 @@ func (s *Server) html(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			for _, row := range rows {
+				row["changed_at"] = htmlValue(row["changed_at"])
 				row["from_status"] = map[string]any{"value": row["from_status"]}
 				row["to_status"] = map[string]any{"value": row["to_status"]}
 			}
