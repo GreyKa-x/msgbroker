@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="section-header">
+  <div>
+    <h1>{{ "Edit Job" if job and job.id is not none else "New Job" }}</h1>
+    <p>Cron uses the same parser as the live scheduler (5 or 6 fields). On validation failure the form keeps your input and shows the reason. Headers and bodies must be JSON objects. Dynamic body value: UUID.</p>
+  </div>
+</section>
+
+{% if error %}
+  <div class="alert">{{ error }}</div>
+{% endif %}
+
+<form class="form panel" method="post" action="{{ form_action }}">
+  <input type="hidden" name="environment" value="{{ active_environment }}">
+  <div class="grid two job-details">
+    <label>
+      <span>Name</span>
+      <input name="name" required value="{{ job.name if job else '' }}">
+    </label>
+
+    <label>
+      <span>Cron expression</span>
+      <input name="cron_expression" required placeholder="*/5 * * * *" value="{{ job.cron_expression if job else '' }}">
+    </label>
+
+  </div>
+
+  <div class="grid two">
+    <label>
+      <span>Request method</span>
+      <select name="execute_method">
+        {% for method in methods %}
+          <option value="{{ method }}" {% if job and job.execute_method == method %}selected{% elif not job and method == "POST" %}selected{% endif %}>{{ method }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Request URL</span>
+      <input name="execute_url" required placeholder="http://localhost:9000/tasks/run" value="{{ job.execute_url if job else '' }}">
+    </label>
+  </div>
+
+  <div class="optional-section" data-optional-section>
+    <label class="check-row optional-toggle">
+      <input type="checkbox" data-optional-toggle {% if headers_enabled %}checked{% endif %}>
+      <span>Request headers</span>
+    </label>
+    <input id="execute_headers" name="execute_headers" type="hidden" value="{{ job.execute_headers if job else '{}' }}">
+    <div class="optional-content" data-optional-content {% if not headers_enabled %}hidden{% endif %}>
+      <div class="headers-editor" data-headers-editor>
+        <div class="header-row header-head">
+          <span>Key</span>
+          <span>Value</span>
+          <span></span>
+          <span></span>
+        </div>
+        <div data-header-rows>
+          {% for row in header_rows %}
+          <div class="header-row">
+            <input data-header-key value="{{ row.key }}" placeholder="Authorization">
+            <input data-header-value value="{{ row.value }}" placeholder="Bearer token">
+            <button type="button" class="token-button" data-insert-token="{{ "{{UUID}}" }}" data-header-token>UUID</button>
+            <button type="button" data-remove-header title="Remove header">Remove</button>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="button" class="secondary-action" data-add-header>Add Header</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="optional-section" data-optional-section>
+    <label class="check-row optional-toggle">
+      <input type="checkbox" data-optional-toggle {% if body_enabled %}checked{% endif %}>
+      <span>Request body</span>
+    </label>
+    <div class="optional-content" data-optional-content {% if not body_enabled %}hidden{% endif %}>
+      <div class="json-editor" data-json-editor>
+        <div class="json-toolbar">
+          <button type="button" class="token-button" data-insert-token="{{ "{{UUID}}" }}" data-target="execute_body">UUID</button>
+          <button type="button" data-format-json data-target="execute_body">Format</button>
+          <span class="json-status" data-json-status></span>
+        </div>
+        <div class="ace-json-editor" data-ace-json-editor></div>
+        <textarea id="execute_body" name="execute_body" spellcheck="false" data-json-textarea>{{ job.execute_body if job else '{}' }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    Health checks use <code>HEAD</code> on <code>{request URL}/_health</code>. A 2xx response is healthy.
+  </div>
+
+  <label class="check-row">
+    <input name="enabled" type="checkbox" value="true" {% if not job or job.enabled %}checked{% endif %}>
+    <span>Enabled</span>
+  </label>
+
+  <div class="form-actions">
+    <button class="primary" type="submit">Save</button>
+    <a class="button" href="/?environment={{ active_environment }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

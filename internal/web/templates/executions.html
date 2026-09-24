@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="section-header">
+  <div>
+    <h1>Executions</h1>
+    <p>{{ job.name }} · {{ job.environment }}</p>
+  </div>
+  <form method="post" action="/jobs/{{ job.id }}/run" data-run-form>
+    <button class="primary" type="button" data-run-once {% if job.managed_key %}disabled{% endif %}>{{ "Scheduled delivery" if job.managed_key else "Run Once" }}</button>
+  </form>
+</section>
+
+<dialog class="confirm-dialog" data-run-dialog>
+  <div class="confirm-dialog-content">
+    <h2>Run this job once?</h2>
+    <p>This will immediately perform a health check and call <strong>{{ job.name }} · {{ job.environment }}</strong>.</p>
+    <div class="confirm-dialog-actions">
+      <button type="button" data-cancel-run>Cancel</button>
+      <button class="primary" type="button" data-confirm-run>{{ "Scheduled delivery" if job.managed_key else "Run Once" }}</button>
+    </div>
+  </div>
+</dialog>
+
+<section class="panel">
+  {% if executions %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>HTTP</th>
+            <th>Started</th>
+            <th>Finished</th>
+            <th>Response</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in executions %}
+          <tr>
+            <td><span class="status {{ run.status.value }}">{{ ("Delivery " ~ run.status.value) if job.managed_key else run.status.value }}</span></td>
+            <td>{{ run.status_code or "-" }}</td>
+            <td>{{ run.started_at }}</td>
+            <td>{{ run.finished_at or "-" }}</td>
+            <td class="response-cell">
+              {% if run.response_body %}
+                <details>
+                  <summary>View</summary>
+                  <pre>{{ run.response_body }}</pre>
+                </details>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td class="error-cell">{{ run.error_message or "" }}
+            {% if job.managed_key and run.status.value == "failed" %}
+            <form method="post" action="/jobs/{{ job.id }}/deliveries/{{ run.id }}/retry"><button type="submit">Retry delivery</button></form>
+            {% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="muted">No executions recorded.</p>
+  {% endif %}
+</section>
+{% endblock %}

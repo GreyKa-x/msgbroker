@@ -1,0 +1,29 @@
+name: verify
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-only
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -ptest-only"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -race -count=1 ./...
+        env:
+          TEST_MYSQL_DSN: root:test-only@tcp(127.0.0.1:3306)/
+      - run: go vet ./...
+      - run: node --check internal/web/static/app.js && node --test tests/test_uuid_insertion.cjs
+      - run: CGO_ENABLED=0 go build ./cmd/msgbroker
+      - run: docker build -t msgbroker:test .

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="section-header">
+  <div>
+    <h1>Worker Status Changes</h1>
+    <p>{{ job.name }} · {{ job.environment }}</p>
+  </div>
+</section>
+
+<section class="panel">
+  {% if changes %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>From</th>
+            <th>To</th>
+            <th>HTTP</th>
+            <th>Changed</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for change in changes %}
+          <tr>
+            <td><span class="status {{ change.from_status.value }}">{{ change.from_status.value }}</span></td>
+            <td><span class="status {{ change.to_status.value }}">{{ change.to_status.value }}</span></td>
+            <td>{{ change.status_code or "-" }}</td>
+            <td>{{ change.changed_at }}</td>
+            <td class="error-cell">{{ change.error_message or "" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="muted">No status changes recorded.</p>
+  {% endif %}
+</section>
+{% endblock %}
