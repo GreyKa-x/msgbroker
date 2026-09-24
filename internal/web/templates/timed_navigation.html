@@ -1,0 +1,4 @@
+<nav class="broker-tabs" aria-label="定时消息管理">
+  <a class="subsection-tab" href="/messages?environment={{ active_environment }}" {% if tab == 'messages' %}aria-current="page"{% endif %}>消息</a>
+  <a class="subsection-tab" href="/topics?environment={{ active_environment }}" {% if tab == 'topics' %}aria-current="page"{% endif %}>Topic 配置</a>
+</nav>

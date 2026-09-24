@@ -5,6 +5,10 @@
     <h1>Jobs</h1>
     <p>Configure cron-triggered HTTP jobs. Health checks probe the trigger URL's /_health endpoint with HEAD.</p>
   </div>
+  <div class="page-actions">
+    {% include "environment_switch.html" %}
+    <a class="button primary" href="/jobs/new?environment={{ active_environment }}">New Job</a>
+  </div>
 </section>
 
 {% for environment in (active_environment,) %}

@@ -748,7 +748,9 @@ textarea {
   white-space: nowrap;
 }
 .section-tab[aria-current="page"] { color: var(--primary); border-bottom-color: var(--primary); }
-.section-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
+.page-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; flex-shrink: 0; }
+.page-context { display: flex; gap: 16px; align-items: center; margin-bottom: 20px; color: var(--muted); }
+.page-context span { background: var(--code); border-radius: 4px; padding: 3px 8px; }
 .environment-switch { display: inline-flex; gap: 6px; }
 .broker-tabs { display: flex; gap: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
 .subsection-tab { padding: 0 2px 12px; color: var(--muted); border-bottom: 2px solid transparent; text-decoration: none; }

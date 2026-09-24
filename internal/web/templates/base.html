@@ -6,7 +6,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title or "msgbroker" }}</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260924-sections">
+  <link rel="stylesheet" href="/static/styles.css?v=20260924-page-actions">
   <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/ace.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/mode-json.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/theme-chrome.js" defer></script>
@@ -27,22 +27,6 @@
     </nav>
   </header>
   <main class="page">
-    <div class="section-toolbar">
-      <nav class="environment-switch" aria-label="Environment">
-        {% for environment in ('prod', 'test') %}
-        <a class="button {{ 'primary' if environment == active_environment else '' }}" href="{% if tab == 'messages' %}/messages{% elif tab == 'topics' %}/topics{% elif request.url.path == '/jobs/new' %}/jobs/new{% else %}/{% endif %}?environment={{ environment }}" {% if environment == active_environment %}aria-current="page"{% endif %}>{{ environment }}</a>
-        {% endfor %}
-      </nav>
-      {% if tab != 'messages' and tab != 'topics' %}
-      <a class="button primary" href="/jobs/new?environment={{ active_environment }}">New Job</a>
-      {% endif %}
-    </div>
-    {% if tab == 'messages' or tab == 'topics' %}
-    <nav class="broker-tabs" aria-label="定时消息管理">
-      <a class="subsection-tab" href="/messages?environment={{ active_environment }}" {% if tab == 'messages' %}aria-current="page"{% endif %}>消息</a>
-      <a class="subsection-tab" href="/topics?environment={{ active_environment }}" {% if tab == 'topics' %}aria-current="page"{% endif %}>Topic 配置</a>
-    </nav>
-    {% endif %}
     {% block content %}{% endblock %}
   </main>
 </body>

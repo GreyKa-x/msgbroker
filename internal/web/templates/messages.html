@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="section-header"><div><h1>定时消息</h1><p>指定时间投递一次。接收方收到原始 JSON body；不承诺顺序，失败可能重试。</p></div></section>
+<section class="section-header"><div><h1>定时消息</h1><p>指定时间投递一次。接收方收到原始 JSON body；不承诺顺序，失败可能重试。</p></div><div class="page-actions">{% include "environment_switch.html" %}</div></section>
+{% include "timed_navigation.html" %}
 {% if error %}<div class="alert">{{ error }}</div>{% endif %}
 <form class="form panel" method="post" action="/messages">
 <input type="hidden" name="environment" value="{{ active_environment }}">

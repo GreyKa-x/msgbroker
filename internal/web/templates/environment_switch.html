@@ -1,0 +1,5 @@
+<nav class="environment-switch" aria-label="Environment">
+  {% for environment in ('prod', 'test') %}
+  <a class="button {{ 'primary' if environment == active_environment else '' }}" href="{% if tab == 'messages' %}/messages{% elif tab == 'topics' %}/topics{% else %}/{% endif %}?environment={{ environment }}" {% if environment == active_environment %}aria-current="page"{% endif %}>{{ environment }}</a>
+  {% endfor %}
+</nav>
