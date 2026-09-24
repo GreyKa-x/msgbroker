@@ -187,7 +187,6 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		hours = 24
 	}
 	htmlJobs := []broker.Row{}
-	managed := map[int64]any{}
 	byID := map[int64]broker.Row{}
 	for _, j := range jobs {
 		view := htmlJob(j)
@@ -196,7 +195,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		if broker.Str(j["managed_key"]) != "" {
 			var spec any
 			json.Unmarshal([]byte(broker.Str(j["managed_definition"])), &spec)
-			managed[broker.Int(j["id"])] = spec
+			view["managed_schedule"] = spec
 		}
 	}
 	rows, e := broker.Rows(r.Context(), s.Store.DB, "SELECT e.*,s.success_count,s.failed_count FROM execution_records e JOIN (SELECT job_id,MAX(id) latest_id,SUM(status='success') success_count,SUM(status='failed') failed_count FROM execution_records WHERE started_at>=? GROUP BY job_id) s ON s.latest_id=e.id ORDER BY e.started_at DESC", time.Now().UTC().Add(-time.Duration(hours)*time.Hour))
@@ -210,7 +209,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		v["job"] = byID[broker.Int(row["job_id"])]
 		summaries = append(summaries, map[string]any{"execution": v, "success_count": broker.Int(row["success_count"]), "failed_count": broker.Int(row["failed_count"])})
 	}
-	s.render(w, r, "jobs.html", map[string]any{"jobs": htmlJobs, "managed_schedules": managed, "recent_execution_summaries": summaries, "window_hours": hours, "window_options": []int{1, 6, 12, 24, 72, 168}}, 200)
+	s.render(w, r, "jobs.html", map[string]any{"jobs": htmlJobs, "recent_execution_summaries": summaries, "window_hours": hours, "window_options": []int{1, 6, 12, 24, 72, 168}}, 200)
 }
 func (s *Server) messagePages(w http.ResponseWriter, r *http.Request) {
 	environment := env(r)

@@ -44,7 +44,7 @@
             <td><strong>{{ job.name }}</strong></td>
             <td class="cron-cell">
               {% if job.managed_key %}
-              {% set schedule = managed_schedules[job.id] %}
+              {% set schedule = job.managed_schedule %}
               <div>{{ 'Once' if schedule.schedule_type == 'once' else {'12h': 'Every 12 hours', '24h': 'Every 24 hours', 'weekly': 'Weekly'}[schedule.interval_type] }}</div>
               <div>Start: {{ schedule.run_at }}</div>
               <div>Timezone: {{ schedule.timezone }}</div>

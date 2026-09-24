@@ -121,3 +121,28 @@ func TestRejectCrossOriginMutation(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 }
+
+func TestManagedSchedulesRenderInLegacyList(t *testing.T) {
+	db := testutil.DB(t)
+	id, err := db.SaveJob(context.Background(), 0, broker.Row{"name": "Managed schedule", "environment": "test", "cron_expression": "0 0 * * *", "execute_method": "POST", "execute_url": "http://localhost/task", "execute_headers": "{}", "execute_body": "{}", "enabled": false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, spec := range []string{
+		`{"schedule_type":"once","run_at":"2030-01-01T00:00:00Z","timezone":"Asia/Shanghai"}`,
+		`{"schedule_type":"recurring","interval_type":"24h","run_at":"2030-01-01T00:00:00Z","timezone":"Asia/Shanghai"}`,
+	} {
+		if _, err = db.DB.Exec("UPDATE jobs SET managed_key='test:fixture',managed_definition=? WHERE id=?", spec, id); err != nil {
+			t.Fatal(err)
+		}
+		s, err := New(db, broker.NewEngine(db), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/?environment=test", nil))
+		if w.Code != 200 || !strings.Contains(w.Body.String(), "Asia/Shanghai") {
+			t.Fatalf("%d %s", w.Code, w.Body.String())
+		}
+	}
+}
