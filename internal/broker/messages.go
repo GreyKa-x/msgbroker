@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -56,6 +57,15 @@ func (s *Store) Messages(ctx context.Context, env string, f MessageFilter) ([]Me
 		q += " AND t.name=?"
 		a = append(a, f.Topic)
 	}
+	if f.UniqueID != "" {
+		q += " AND m.unique_id=?"
+		a = append(a, f.UniqueID)
+	}
+	if f.UniqueIDPrefix != "" {
+		q += " AND m.unique_id LIKE ?"
+		a = append(a, strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(f.UniqueIDPrefix)+"%")
+	}
+
 	if f.Result != "" {
 		q += " AND m.result=?"
 		a = append(a, f.Result)

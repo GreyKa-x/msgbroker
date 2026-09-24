@@ -270,7 +270,7 @@ func (s *Server) messagesAPI(w http.ResponseWriter, r *http.Request, p []string)
 func filter(r *http.Request) broker.MessageFilter {
 	q := r.URL.Query()
 	before, _ := time.Parse(time.RFC3339Nano, q.Get("before"))
-	return broker.MessageFilter{OnlyTimed: true, BeforeID: q.Get("beforeId"), Topic: q.Get("topic"), Status: q.Get("status"), Result: q.Get("result"), ScheduleID: q.Get("jobId"), Limit: number(q.Get("limit"), 100), Before: before}
+	return broker.MessageFilter{OnlyTimed: true, UniqueID: q.Get("uniqueId"), UniqueIDPrefix: q.Get("uniqueIdPrefix"), BeforeID: q.Get("beforeId"), Topic: q.Get("topic"), Status: q.Get("status"), Result: q.Get("result"), ScheduleID: q.Get("jobId"), Limit: number(q.Get("limit"), 100), Before: before}
 }
 func (s *Server) managedAPI(w http.ResponseWriter, r *http.Request, p []string) {
 	ctx := r.Context()

@@ -48,7 +48,7 @@ The callback body is exactly the payload's JSON value; no envelope or message-ID
 
 ## Query, cancel, retry
 
-- `GET /messages`: `topic`, `status`, `result`, `limit` (1–200, default 100), `before` (RFC3339), `beforeId` (tie-breaker) filters. Returns `{"items":[...]}`. For next page pass the last item's `createdAt` and `id` as `before`/`beforeId`.
+- `GET /messages`: `topic`, `uniqueId` (exact), `uniqueIdPrefix` (literal prefix, including underscores), `status`, `result`, `limit` (1–200, default 100), `before` (RFC3339), `beforeId` (tie-breaker) filters. Returns `{"items":[...]}`. For next page pass the last item's `createdAt` and `id` as `before`/`beforeId`.
 - `GET /messages/{messageId}`: state, original payload/time, attempts, next available time, last HTTP status/error/response. Environment checked.
 - `POST /messages/{messageId}/cancel`: pending only. Duplicate cancellation succeeds; delivering or terminal states return 409. Cannot revoke a callback already claimed.
 - `POST /messages/{messageId}/retry`: completed + failed only; creates a new message with a fresh attempt budget and an internal unique key. Returns `{ "messageId": "msg_...", "status": "pending" }`. Preserves the original failure and sets its `redeliveredAs`; repeating the same action returns that same new record. To redeliver again, use the latest failed record. Administrative action; may repeat business side effects.

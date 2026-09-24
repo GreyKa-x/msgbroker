@@ -157,3 +157,19 @@ func TestTimerStateMigration(t *testing.T) {
 		}
 	}
 }
+
+func TestMessageKeyFiltersAreLiteral(t *testing.T) {
+	s := testutil.DB(t)
+	topic(t, s, "http://127.0.0.1:9999")
+	for _, key := range []string{"wake_a%_1", "wake_a%_2", "wake_ax_3", "wake_b%_4"} {
+		send(t, s, key, time.Now().Add(time.Hour))
+	}
+	rows, err := s.Messages(ctx, "test", broker.MessageFilter{Topic: "test", UniqueIDPrefix: "wake_a%_"})
+	if err != nil || len(rows) != 2 {
+		t.Fatal(rows, err)
+	}
+	rows, err = s.Messages(ctx, "test", broker.MessageFilter{Topic: "test", UniqueID: "wake_a%_1"})
+	if err != nil || len(rows) != 1 || rows[0].UniqueID != "wake_a%_1" {
+		t.Fatal(rows, err)
+	}
+}

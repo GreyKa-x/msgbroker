@@ -58,12 +58,14 @@ type HealthChange struct {
 	CheckedAt time.Time `json:"checkedAt"`
 }
 type MessageFilter struct {
-	OnlyTimed  bool
-	BeforeID   string
-	Topic      string
-	Status     string
-	Result     string
-	ScheduleID string
-	Limit      int
-	Before     time.Time
+	UniqueID       string
+	UniqueIDPrefix string
+	OnlyTimed      bool
+	BeforeID       string
+	Topic          string
+	Status         string
+	Result         string
+	ScheduleID     string
+	Limit          int
+	Before         time.Time
 }
