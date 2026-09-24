@@ -168,7 +168,7 @@ func (e *Engine) Claim(ctx context.Context, id string) (*Delivery, error) {
 					return er
 				}
 				if m["record_id"] == nil {
-					res, er := tx.ExecContext(ctx, "INSERT INTO execution_records(job_id,status,started_at,finished_at,scheduled_at,attempts) VALUES (?,'pending',?,NULL,?,?)", job["id"], now, m["run_at"], m["attempts"])
+					res, er := tx.ExecContext(ctx, "INSERT INTO execution_records(job_id,status,started_at,finished_at,scheduled_at,attempts,version) VALUES (?,'pending',?,NULL,?,?,0)", job["id"], now, m["run_at"], m["attempts"])
 					if er != nil {
 						return er
 					}

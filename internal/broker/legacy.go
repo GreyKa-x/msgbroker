@@ -150,7 +150,7 @@ func (s *Store) SaveJob(ctx context.Context, id int64, j Row) (int64, error) {
 				return e
 			}
 		} else {
-			r, e := tx.ExecContext(ctx, "INSERT INTO jobs(name,environment,cron_expression,execute_method,execute_url,execute_headers,execute_body,health_check_method,health_check_url,health_check_headers,health_check_body,enabled,worker_status,created_at,updated_at,broker_next_at) VALUES (?,?,?,?,?,?,?,'HEAD',?,?,'{}',?,'unknown',?,?,?)", j["name"], j["environment"], j["cron_expression"], j["execute_method"], j["execute_url"], j["execute_headers"], j["execute_body"], HealthURL(Str(j["execute_url"])), j["execute_headers"], Bool(j["enabled"]), now, now, next)
+			r, e := tx.ExecContext(ctx, "INSERT INTO jobs(name,environment,cron_expression,execute_method,execute_url,execute_headers,execute_body,health_check_method,health_check_url,health_check_headers,health_check_body,enabled,worker_status,created_at,updated_at,broker_next_at,managed_version,managed_paused) VALUES (?,?,?,?,?,?,?,'HEAD',?,?,'{}',?,'unknown',?,?,?,0,FALSE)", j["name"], j["environment"], j["cron_expression"], j["execute_method"], j["execute_url"], j["execute_headers"], j["execute_body"], HealthURL(Str(j["execute_url"])), j["execute_headers"], Bool(j["enabled"]), now, now, next)
 			if e != nil {
 				return e
 			}

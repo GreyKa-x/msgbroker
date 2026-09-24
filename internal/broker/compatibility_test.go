@@ -197,3 +197,26 @@ func TestColdRestartDeliversPersistedTimedMessage(t *testing.T) {
 	}
 	t.Fatal("ACK not persisted")
 }
+
+// SQLAlchemy client-side defaults are absent from deployed MySQL DDL.
+func TestLegacySchemaWithoutServerDefaults(t *testing.T) {
+	s := testutil.DB(t)
+	for _, q := range []string{
+		"ALTER TABLE jobs MODIFY managed_version INT NOT NULL, MODIFY managed_paused BOOLEAN NOT NULL",
+		"ALTER TABLE execution_records MODIFY version INT NOT NULL, MODIFY attempts INT NOT NULL",
+	} {
+		if _, err := s.DB.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer receiver.Close()
+	id := job(t, s, receiver.URL, false)
+	rec, err := broker.NewEngine(s).RunJob(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec["status"] != "success" {
+		t.Fatal(rec)
+	}
+}
