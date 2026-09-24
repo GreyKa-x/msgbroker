@@ -165,7 +165,7 @@
             <td><span class="status {{ summary.execution.status.value }}">{{ ("Delivery " ~ summary.execution.status.value) if summary.execution.job.managed_key else summary.execution.status.value }}</span></td>
             <td>{{ summary.success_count }}</td>
             <td>{{ summary.failed_count }}</td>
-            <td>{{ summary.execution.status_code or "-" }}</td>
+            <td>{{ summary.execution.status_code if summary.execution.status_code else "-" }}</td>
             <td>{{ summary.execution.started_at }}</td>
           </tr>
           {% endfor %}

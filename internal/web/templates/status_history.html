@@ -26,9 +26,9 @@
           <tr>
             <td><span class="status {{ change.from_status.value }}">{{ change.from_status.value }}</span></td>
             <td><span class="status {{ change.to_status.value }}">{{ change.to_status.value }}</span></td>
-            <td>{{ change.status_code or "-" }}</td>
+            <td>{{ change.status_code if change.status_code else "-" }}</td>
             <td>{{ change.changed_at }}</td>
-            <td class="error-cell">{{ change.error_message or "" }}</td>
+            <td class="error-cell">{{ change.error_message if change.error_message else "" }}</td>
           </tr>
           {% endfor %}
         </tbody>

@@ -40,9 +40,9 @@
           {% for run in executions %}
           <tr>
             <td><span class="status {{ run.status.value }}">{{ ("Delivery " ~ run.status.value) if job.managed_key else run.status.value }}</span></td>
-            <td>{{ run.status_code or "-" }}</td>
+            <td>{{ run.status_code if run.status_code else "-" }}</td>
             <td>{{ run.started_at }}</td>
-            <td>{{ run.finished_at or "-" }}</td>
+            <td>{{ run.finished_at if run.finished_at else "-" }}</td>
             <td class="response-cell">
               {% if run.response_body %}
                 <details>
@@ -53,7 +53,7 @@
                 -
               {% endif %}
             </td>
-            <td class="error-cell">{{ run.error_message or "" }}
+            <td class="error-cell">{{ run.error_message if run.error_message else "" }}
             {% if job.managed_key and run.status.value == "failed" %}
             <form method="post" action="/jobs/{{ job.id }}/deliveries/{{ run.id }}/retry"><button type="submit">Retry delivery</button></form>
             {% endif %}</td>

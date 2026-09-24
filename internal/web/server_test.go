@@ -146,3 +146,31 @@ func TestManagedSchedulesRenderInLegacyList(t *testing.T) {
 		}
 	}
 }
+
+func TestJinjaFallbackValuesPreserveDisplay(t *testing.T) {
+	s, err := New(nil, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		data map[string]any
+		want []string
+	}{
+		{"executions.html", map[string]any{"job": htmlJob(broker.Row{"id": int64(1), "environment": "test", "name": "fixture"}), "executions": []broker.Row{htmlExecution(broker.Row{"status": "failed", "status_code": 503, "error_message": "callback unavailable", "finished_at": time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)})}}, []string{"<td>503</td>", "callback unavailable", "2026-09-24 00:00:00"}},
+		{"topics.html", map[string]any{"tab": "topics", "edit": map[string]any{}}, []string{`value="10"`, `value="5"`}},
+		{"messages.html", map[string]any{"tab": "messages", "payload": "{}"}, []string{`name="payload" required>{}</textarea>`}},
+	}
+	for _, c := range cases {
+		w := httptest.NewRecorder()
+		s.render(w, httptest.NewRequest("GET", "/?environment=test", nil), c.name, c.data, 200)
+		if w.Code != 200 {
+			t.Fatal(c.name, w.Body.String())
+		}
+		for _, want := range append(c.want, "<title>msgbroker</title>") {
+			if !strings.Contains(w.Body.String(), want) {
+				t.Fatalf("%s missing %q", c.name, want)
+			}
+		}
+	}
+}

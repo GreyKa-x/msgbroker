@@ -8,7 +8,7 @@
 <div class="grid two"><label>Topic<select name="topic" required>{% for topic in topics %}<option value="{{ topic.name }}">{{ topic.name }}</option>{% endfor %}</select></label>
 <label>Unique ID<input name="uniqueId" required value="{{ unique_id }}" maxlength="160"></label>
 <label>投递时间（带时区）<input name="runAt" required value="{{ run_at }}" placeholder="2026-09-25T10:00:00+08:00"></label></div>
-<label>Payload<textarea class="broker-json" name="payload" required>{{ payload or '{}' }}</textarea></label>
+<label>Payload<textarea class="broker-json" name="payload" required>{{ payload if payload else '{}' }}</textarea></label>
 <button class="primary">创建定时消息</button></form>
 <form class="window-filter" method="get"><input type="hidden" name="environment" value="{{ active_environment }}"><label>Topic<input name="topic" value="{{ topic_filter }}"></label><label>状态<select name="status"><option value="">全部</option>{% for s in ('waiting','ready','delivering','delivered','failed','cancelled') %}<option {% if status_filter == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label><button>筛选</button></form>
 <section class="panel"><div class="table-wrap"><table><thead><tr><th>消息 / Unique ID</th><th>Topic</th><th>时间</th><th>状态</th><th>尝试</th><th>详情</th><th>操作</th></tr></thead><tbody>
