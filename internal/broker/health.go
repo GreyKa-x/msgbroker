@@ -67,7 +67,7 @@ func (e *Engine) ProbeJob(ctx context.Context, id int64, force bool) (string, er
 		}
 		return er
 	})
-	if changed {
+	if changed && (raw == "unhealthy" || previous == "unhealthy" && raw == "healthy") {
 		e.Notify(ctx, "Worker "+Str(job["name"])+": "+previous+" -> "+raw)
 	}
 	return raw, err
@@ -83,7 +83,21 @@ func (e *Engine) RefreshHealth(ctx context.Context) {
 		}
 		e.ProbeJob(ctx, Int(j["id"]), false)
 	}
-	// Retain legacy seven-day execution/status history policy; keep message IDs for idempotency.
+	for _, environment := range []string{"prod", "test"} {
+		topics, err := e.Store.Topics(ctx, environment)
+		if err != nil {
+			continue
+		}
+		for _, t := range topics {
+			if ctx.Err() != nil {
+				return
+			}
+			if t.HealthURL != "" {
+				e.ProbeTopic(ctx, environment, t.Name, false)
+			}
+		}
+	}
+	// Retain legacy seven-day execution history policy; keep message IDs for idempotency.
 	e.Store.DB.ExecContext(ctx, "DELETE FROM execution_records WHERE finished_at<?", time.Now().UTC().Add(-7*24*time.Hour))
 }
 func (e *Engine) Notify(ctx context.Context, text string) {
@@ -93,4 +107,66 @@ func (e *Engine) Notify(ctx context.Context, text string) {
 	}
 	b, _ := json.Marshal(map[string]any{"msg_type": "text", "content": map[string]string{"text": "【msgbroker】 " + text}})
 	e.request(ctx, "POST", url, nil, b, 5)
+}
+
+// ProbeTopic observes readiness without consuming or altering timed messages.
+func (e *Engine) ProbeTopic(ctx context.Context, environment, name string, force bool) (string, error) {
+	var topic Topic
+	var version int64
+	err := e.Store.tx(ctx, func(tx *sql.Tx) error {
+		var er error
+		topic, er = scanTopic(tx.QueryRowContext(ctx, "SELECT "+topicColumns+" FROM topics WHERE environment=? AND name=? FOR UPDATE", environment, name))
+		if er != nil {
+			return er
+		}
+		if topic.HealthURL == "" {
+			return nil
+		}
+		if er = tx.QueryRowContext(ctx, "SELECT health_version FROM topics WHERE id=?", topic.ID).Scan(&version); er != nil {
+			return er
+		}
+		version++
+		_, er = tx.ExecContext(ctx, "UPDATE topics SET health_version=? WHERE id=?", version, topic.ID)
+		return er
+	})
+	if err != nil {
+		return "", err
+	}
+	if topic.HealthURL == "" {
+		return "unknown", nil
+	}
+	status, _, _ := e.request(ctx, "HEAD", topic.HealthURL, topic.Headers, nil, topic.TimeoutSeconds)
+	raw := "unhealthy"
+	if status >= 200 && status < 300 {
+		raw = "healthy"
+	}
+	err = e.Store.tx(ctx, func(tx *sql.Tx) error {
+		row, er := one(ctx, tx, "SELECT health_status,health_raw,health_streak,health_version FROM topics WHERE id=? FOR UPDATE", topic.ID)
+		if er != nil {
+			return er
+		}
+		if Int(row["health_version"]) != version {
+			return nil
+		}
+		streak := int64(1)
+		if row["health_raw"] == raw {
+			streak = Int(row["health_streak"]) + 1
+		}
+		persisted := Str(row["health_status"])
+		if force || streak >= 3 {
+			persisted = raw
+		}
+		if force {
+			streak = 0
+		}
+		now := time.Now().UTC()
+		if _, er = tx.ExecContext(ctx, "UPDATE topics SET health_status=?,health_raw=?,health_streak=?,last_checked_at=? WHERE id=?", persisted, raw, streak, now, topic.ID); er != nil {
+			return er
+		}
+		if persisted != Str(row["health_status"]) {
+			_, er = tx.ExecContext(ctx, "INSERT INTO health_changes(topic_id,status,checked_at) VALUES(?,?,?)", topic.ID, persisted, now)
+		}
+		return er
+	})
+	return raw, err
 }

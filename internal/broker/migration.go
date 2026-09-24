@@ -24,6 +24,17 @@ func (s *Store) upgradeLegacy(ctx context.Context, c *sql.Conn) error {
 			}
 		}
 	}
+	for _, index := range []struct{ table, column, name string }{{"jobs", "managed_key", "broker_managed_key"}, {"execution_records", "delivery_id", "broker_delivery_id"}} {
+		var n int
+		if e := c.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name=? AND column_name=? AND non_unique=0", index.table, index.column).Scan(&n); e != nil {
+			return e
+		}
+		if n == 0 {
+			if _, e := c.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s ADD UNIQUE KEY %s (%s)", index.table, index.name, index.column)); e != nil {
+				return e
+			}
+		}
+	}
 	// Additive operational metadata; retain names, IDs, headers, histories and legacy nullable fields.
 	if _, e := c.ExecContext(ctx, "UPDATE jobs SET environment=CASE WHEN execute_url LIKE '%.test.%' OR name REGEXP '[(（]test[)）]$' THEN 'test' ELSE 'prod' END WHERE environment IS NULL"); e != nil {
 		return e

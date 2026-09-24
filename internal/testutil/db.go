@@ -13,6 +13,7 @@ func DB(t *testing.T) *broker.Store    { return db(t, true) }
 func RawDB(t *testing.T) *broker.Store { return db(t, false) }
 func db(t *testing.T, migrate bool) *broker.Store {
 	t.Helper()
+	t.Setenv("LARK_WEBHOOK_URL", "")
 	raw := os.Getenv("TEST_MYSQL_DSN")
 	if raw == "" {
 		t.Skip("TEST_MYSQL_DSN required for database integration test")

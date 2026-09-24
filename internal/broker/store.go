@@ -28,7 +28,10 @@ func Open(dsn string) (*Store, error) {
 	}
 	cfg.ParseTime = true
 	cfg.Loc = time.UTC
-	cfg.Params = map[string]string{"time_zone": "'+00:00'"}
+	if cfg.Params == nil {
+		cfg.Params = map[string]string{}
+	}
+	cfg.Params["time_zone"] = "'+00:00'"
 	cfg.Timeout = 5 * time.Second
 	cfg.ReadTimeout = 10 * time.Second
 	cfg.WriteTimeout = 10 * time.Second

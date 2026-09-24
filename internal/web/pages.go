@@ -272,6 +272,9 @@ func (s *Server) messagePages(w http.ResponseWriter, r *http.Request) {
 		code = 400
 	}
 	if tab == "topics" {
+		if r.Method == "POST" && err != nil {
+			data["edit"] = map[string]any{"name": r.FormValue("name"), "url": r.FormValue("url"), "method": r.FormValue("method"), "timeoutSeconds": r.FormValue("timeoutSeconds"), "maxAttempts": r.FormValue("maxAttempts"), "healthUrl": r.FormValue("healthUrl"), "enabled": r.FormValue("enabled") == "true"}
+		}
 		if name := r.URL.Query().Get("edit"); name != "" {
 			t, e := s.Store.Topic(ctx, environment, name)
 			if e != nil {

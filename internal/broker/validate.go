@@ -25,6 +25,16 @@ func ID(prefix string) string {
 	}
 	return prefix + hex.EncodeToString(b)
 }
+func UUID() string {
+	b := make([]byte, 16)
+	if _, e := rand.Read(b); e != nil {
+		panic(e)
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	v := hex.EncodeToString(b)
+	return v[:8] + "-" + v[8:12] + "-" + v[12:16] + "-" + v[16:20] + "-" + v[20:]
+}
 func ValidEnvironment(v string) bool { return v == "prod" || v == "test" }
 func CanonicalJSON(b []byte) (json.RawMessage, error) {
 	if len(b) > 256*1024 {
@@ -137,7 +147,8 @@ func expandUUID(b json.RawMessage) json.RawMessage {
 	walk = func(x any) any {
 		switch y := x.(type) {
 		case string:
-			return strings.NewReplacer("{{UUID}}", ID(""), "{{uuid}}", ID(""), "__UUID__", ID("")).Replace(y)
+			id := UUID()
+			return strings.NewReplacer("{{UUID}}", id, "{{uuid}}", id, "__UUID__", id).Replace(y)
 		case map[string]any:
 			for k, z := range y {
 				y[k] = walk(z)

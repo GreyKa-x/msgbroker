@@ -8,6 +8,7 @@ import (
 	"github.com/GreyKa-x/msgbroker/internal/testutil"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -252,5 +253,12 @@ func TestCronAPSchedulerSemantics(t *testing.T) {
 		if e != nil || n.Format(time.RFC3339) != c.want {
 			t.Errorf("%s: %s %v", c.expr, n, e)
 		}
+	}
+}
+
+func TestUUIDCompatibility(t *testing.T) {
+	v := broker.UUID()
+	if len(v) != 36 || v[14] != '4' || !strings.Contains("89ab", v[19:20]) || v[8] != '-' || v[13] != '-' || v[18] != '-' || v[23] != '-' {
+		t.Fatal(v)
 	}
 }

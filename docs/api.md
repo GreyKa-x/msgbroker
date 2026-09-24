@@ -19,7 +19,7 @@ Environment is mandatory in the new path: `/openplatform/v1/environments/{test|p
 }
 ```
 
-Name: 1–128 ASCII letters/digits/dot/underscore/hyphen, beginning with a letter or digit. Timeout: 1–120 seconds; max attempts: 1–20 including the first attempt. Headers omitted preserves existing headers; `{}` clears them. Header values are redacted in JSON reads. Topic callback configuration is read when each attempt is claimed, permitting credential rotation and endpoint repair. Do not change a topic to represent a different business operation while old messages exist.
+Name: 1–128 ASCII letters/digits/dot/underscore/hyphen, beginning with a letter or digit. Timeout: 1–120 seconds; max attempts: 1–20 including the first attempt. Headers omitted preserves existing headers; `{}` clears them. Header values are redacted in JSON reads. Optional `healthUrl` is probed with HEAD every minute and shown in the UI; it does not gate timed message delivery. Topic callback configuration is read when each attempt is claimed, permitting credential rotation and endpoint repair. Do not change a topic to represent a different business operation while old messages exist.
 
 `GET /topics`, `GET /topics/{name}`, `DELETE /topics/{name}`. Deletion is rejected if retained message records reference it. Set `enabled=false` to pause future claims; in-flight requests cannot be recalled. Multiple topics may use the same callback URL. There is no broadcast or consumer SDK.
 

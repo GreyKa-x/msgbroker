@@ -201,7 +201,11 @@ func (e *Engine) Deliver(ctx context.Context, d *Delivery) {
 		}
 	}
 	if reason == "" {
-		status, body, reason = e.request(ctx, d.Topic.Method, d.Topic.URL, d.Topic.Headers, []byte(Str(d.Message["payload"])), d.Topic.TimeoutSeconds)
+		requestBody := []byte(Str(d.Message["payload"]))
+		if Bool(d.Message["preflight"]) && string(requestBody) == "{}" {
+			requestBody = nil
+		}
+		status, body, reason = e.request(ctx, d.Topic.Method, d.Topic.URL, d.Topic.Headers, requestBody, d.Topic.TimeoutSeconds)
 		retry = status == 0 || status == 408 || status == 429 || status >= 500
 	}
 	if err := e.finish(ctx, d, status, body, reason, retry); err != nil {
@@ -217,7 +221,9 @@ func (e *Engine) request(ctx context.Context, method, url string, headers map[st
 	if err != nil {
 		return 0, "", "Invalid request"
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if len(body) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -230,7 +236,7 @@ func (e *Engine) request(ctx context.Context, method, url string, headers map[st
 	if err != nil {
 		return resp.StatusCode, "", "Response could not be read"
 	}
-	text := string(b)
+	text := strings.ToValidUTF8(string(b), "�")
 	for _, v := range headers {
 		if len(v) > 3 {
 			text = strings.ReplaceAll(text, v, "[redacted]")

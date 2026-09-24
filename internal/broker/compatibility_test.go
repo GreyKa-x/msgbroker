@@ -1,11 +1,15 @@
 package broker_test
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/GreyKa-x/msgbroker/internal/broker"
 	"github.com/GreyKa-x/msgbroker/internal/testutil"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -111,4 +115,85 @@ func TestManagedMigrationAndDelivery(t *testing.T) {
 	if broker.Int(out[0]["attempts"]) != 1 || out[0]["status"] != "pending" {
 		t.Fatal(out)
 	}
+}
+
+func TestHealthDebounceAndManualBaseline(t *testing.T) {
+	s := testutil.DB(t)
+	var unhealthy atomic.Bool
+	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if unhealthy.Load() {
+			w.WriteHeader(503)
+		} else {
+			w.WriteHeader(200)
+		}
+	}))
+	defer receiver.Close()
+	id := job(t, s, receiver.URL, false)
+	e := broker.NewEngine(s)
+	for i := 0; i < 2; i++ {
+		if _, err := e.ProbeJob(ctx, id, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	j, _ := s.Job(ctx, id)
+	if j["worker_status"] != "unknown" {
+		t.Fatal("changed before third probe")
+	}
+	e.ProbeJob(ctx, id, false)
+	j, _ = s.Job(ctx, id)
+	if j["worker_status"] != "healthy" {
+		t.Fatal(j)
+	}
+	unhealthy.Store(true)
+	e.ProbeJob(ctx, id, true)
+	j, _ = s.Job(ctx, id)
+	if j["worker_status"] != "unhealthy" {
+		t.Fatal("manual did not update immediately")
+	}
+	unhealthy.Store(false)
+	e.ProbeJob(ctx, id, false)
+	e.ProbeJob(ctx, id, false)
+	j, _ = s.Job(ctx, id)
+	if j["worker_status"] != "unhealthy" {
+		t.Fatal("manual did not reset streak")
+	}
+	e.ProbeJob(ctx, id, false)
+	j, _ = s.Job(ctx, id)
+	if j["worker_status"] != "healthy" {
+		t.Fatal(j)
+	}
+	changes, err := s.Changes(ctx, id, 20)
+	if err != nil || len(changes) != 3 {
+		t.Fatal(changes, err)
+	}
+}
+func TestColdRestartDeliversPersistedTimedMessage(t *testing.T) {
+	s := testutil.DB(t)
+	delivered := make(chan struct{}, 4)
+	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204); delivered <- struct{}{} }))
+	defer receiver.Close()
+	topic(t, s, receiver.URL)
+	m := send(t, s, "restart", time.Now().Add(500*time.Millisecond))
+	run, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	engine := broker.NewEngine(s)
+	engine.Workers = 2
+	go func() { defer close(done); engine.Run(run) }()
+	select {
+	case <-delivered:
+	case <-time.After(8 * time.Second):
+		t.Fatal("persisted message not dispatched")
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		v, _ := s.Message(ctx, "test", m.ID)
+		if v.Status == "delivered" {
+			cancel()
+			<-done
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("ACK not persisted")
 }
