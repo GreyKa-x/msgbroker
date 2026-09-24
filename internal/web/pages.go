@@ -286,6 +286,19 @@ func (s *Server) messagePages(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, "topics.html", data, code)
 		return
 	}
+	if r.Method == "GET" && r.URL.Path == "/messages/new" || r.Method == "POST" && r.URL.Path == "/messages" && err != nil {
+		data["unique_id"] = broker.ID("request_")
+		data["run_at"] = time.Now().Add(time.Minute).Format(time.RFC3339)
+		data["payload"] = "{}"
+		if r.Method == "POST" {
+			data["unique_id"] = r.FormValue("uniqueId")
+			data["run_at"] = r.FormValue("runAt")
+			data["payload"] = r.FormValue("payload")
+		}
+		data["selected_topic"] = r.FormValue("topic")
+		s.render(w, r, "message_form.html", data, code)
+		return
+	}
 	f := filter(r)
 	msgs, e := s.Store.Messages(ctx, environment, f)
 	if e != nil {
@@ -309,14 +322,6 @@ func (s *Server) messagePages(w http.ResponseWriter, r *http.Request) {
 	data["messages"] = views
 	data["topic_filter"] = f.Topic
 	data["status_filter"] = f.Status
-	data["unique_id"] = broker.ID("request_")
-	data["run_at"] = time.Now().Add(time.Minute).Format(time.RFC3339)
-	data["payload"] = "{}"
-	if r.Method == "POST" {
-		data["unique_id"] = r.FormValue("uniqueId")
-		data["run_at"] = r.FormValue("runAt")
-		data["payload"] = r.FormValue("payload")
-	}
 	if len(msgs) > 0 {
 		data["next_before"] = msgs[len(msgs)-1].CreatedAt.Format(time.RFC3339Nano)
 		data["next_id"] = msgs[len(msgs)-1].ID

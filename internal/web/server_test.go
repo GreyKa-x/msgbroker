@@ -28,7 +28,7 @@ func TestTemplatesParseAndEscape(t *testing.T) {
 	if strings.Contains(text, "<script>alert(1)</script>") || !strings.Contains(text, "&lt;script&gt;") {
 		t.Fatal("unescaped job name")
 	}
-	for _, name := range []string{"messages.html", "topics.html"} {
+	for _, name := range []string{"messages.html", "message_form.html", "topics.html"} {
 		w = httptest.NewRecorder()
 		s.render(w, r, name, map[string]any{"topics": []any{}, "messages": []any{}, "edit": map[string]any{}, "tab": "messages"}, 200)
 		if w.Code != 200 {
@@ -159,7 +159,7 @@ func TestJinjaFallbackValuesPreserveDisplay(t *testing.T) {
 	}{
 		{"executions.html", map[string]any{"job": htmlJob(broker.Row{"id": int64(1), "environment": "test", "name": "fixture"}), "executions": []broker.Row{htmlExecution(broker.Row{"status": "failed", "status_code": 503, "error_message": "callback unavailable", "finished_at": time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)})}}, []string{"<td>503</td>", "callback unavailable", "2026-09-24 00:00:00"}},
 		{"topics.html", map[string]any{"tab": "topics", "edit": map[string]any{}}, []string{`value="10"`, `value="5"`}},
-		{"messages.html", map[string]any{"tab": "messages", "payload": "{}"}, []string{`name="payload" required>{}</textarea>`}},
+		{"message_form.html", map[string]any{"tab": "messages", "payload": "{}"}, []string{`name="payload" required>{}</textarea>`}},
 	}
 	for _, c := range cases {
 		w := httptest.NewRecorder()
