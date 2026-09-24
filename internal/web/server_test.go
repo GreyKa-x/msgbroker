@@ -106,7 +106,7 @@ func TestMessageAPIIdempotenceAndEnvironment(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 	w = httptest.NewRecorder()
-	s.render(w, httptest.NewRequest("GET", "/messages?environment=test", nil), "messages.html", map[string]any{"messages": []map[string]any{{"id": first, "payload_text": "<script>bad</script>", "status": "waiting", "runAt": time.Now().String()}}, "tab": "messages", "topics": []any{}}, 200)
+	s.render(w, httptest.NewRequest("GET", "/messages?environment=test", nil), "messages.html", map[string]any{"messages": []map[string]any{{"id": first, "payload_text": "<script>bad</script>", "status": "pending", "runAt": time.Now().String()}}, "tab": "messages", "topics": []any{}}, 200)
 	if w.Code != 200 || strings.Contains(w.Body.String(), "<script>bad</script>") {
 		t.Fatal(w.Code, w.Body.String())
 	}
@@ -158,7 +158,7 @@ func TestJinjaFallbackValuesPreserveDisplay(t *testing.T) {
 		want []string
 	}{
 		{"executions.html", map[string]any{"job": htmlJob(broker.Row{"id": int64(1), "environment": "test", "name": "fixture"}), "executions": []broker.Row{htmlExecution(broker.Row{"status": "failed", "status_code": 503, "error_message": "callback unavailable", "finished_at": time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)})}}, []string{"<td>503</td>", "callback unavailable", "2026-09-24 00:00:00"}},
-		{"topics.html", map[string]any{"tab": "topics", "edit": map[string]any{}}, []string{`value="10"`, `value="5"`}},
+		{"topics.html", map[string]any{"tab": "topics", "edit": map[string]any{}}, []string{`value="10"`, `value="16"`}},
 		{"message_form.html", map[string]any{"tab": "messages", "payload": "{}"}, []string{`name="payload" required>{}</textarea>`}},
 	}
 	for _, c := range cases {
@@ -172,5 +172,63 @@ func TestJinjaFallbackValuesPreserveDisplay(t *testing.T) {
 				t.Fatalf("%s missing %q", c.name, want)
 			}
 		}
+	}
+}
+
+func TestFailureQueueAndRedeliveryAPI(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	if _, err := db.SaveTopic(ctx, broker.Topic{Name: "wake", Environment: "test", URL: "http://127.0.0.1:9999", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	m, err := db.Send(ctx, "test", broker.SendRequest{Topic: "wake", UniqueID: "failed-key", RunAt: time.Now(), Payload: json.RawMessage(`{"x":1}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.DB.Exec("UPDATE messages SET status='completed',result='failed',attempts=16,finished_at=UTC_TIMESTAMP(6) WHERE id=?", m.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.DB.Exec("DELETE FROM message_waits WHERE message_id=?", m.ID); err != nil {
+		t.Fatal(err)
+	}
+	s, err := New(db, broker.NewEngine(db), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	for _, path := range []string{"/messages/failed?environment=test", "/openplatform/v1/environments/test/messages?status=completed&result=failed"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if w.Code != 200 || !strings.Contains(w.Body.String(), m.ID) {
+			t.Fatal(path, w.Code, w.Body.String())
+		}
+	}
+	var newID string
+	for i := 0; i < 2; i++ {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("POST", "/openplatform/v1/environments/test/messages/"+m.ID+"/retry", nil))
+		var out map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		if w.Code != 200 || out["status"] != "pending" || out["messageId"] == m.ID || out["messageId"] == "" {
+			t.Fatal(w.Code, out)
+		}
+		if i == 0 {
+			newID = out["messageId"]
+		} else if newID != out["messageId"] {
+			t.Fatal("retry action duplicated")
+		}
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/messages/failed?environment=test", nil))
+	if w.Code != 200 || !strings.Contains(w.Body.String(), newID) || !strings.Contains(w.Body.String(), "disabled") {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	// Changed parameters on a repeated submission must succeed and return the failed original.
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("POST", "/openplatform/v1/environments/test/messages", strings.NewReader(`{"topic":"wake","uniqueId":"failed-key","runAt":"2030-01-01T00:00:00Z","payload":{"x":2}}`)))
+	if w.Code != 200 || !strings.Contains(w.Body.String(), m.ID) {
+		t.Fatal(w.Code, w.Body.String())
 	}
 }

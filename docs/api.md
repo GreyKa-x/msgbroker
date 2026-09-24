@@ -14,7 +14,7 @@ Environment is mandatory in the new path: `/openplatform/v1/environments/{test|p
   "method": "POST",
   "headers": {"Authorization": "Bearer callback-credential"},
   "timeoutSeconds": 10,
-  "maxAttempts": 5,
+  "maxAttempts": 16,
   "enabled": true
 }
 ```
@@ -36,26 +36,30 @@ Name: 1–128 ASCII letters/digits/dot/underscore/hyphen, beginning with a lette
 }
 ```
 
-All fields required. `uniqueId` is caller-owned (1–160 characters); preserve it across submission retries and business retries. The `__schedule:` prefix is reserved. `runAt` is RFC3339 with offset; UTC storage has microsecond precision, past times become eligible immediately. Payload must be a JSON object, at most 256 KiB; total request limit is 1 MiB.
+All fields required. `uniqueId` is caller-owned (1–160 characters); preserve it across submission retries and business retries. The `__` prefix is reserved. `runAt` is RFC3339 with offset; UTC storage has microsecond precision, past times become eligible immediately. Payload must be a JSON object, at most 256 KiB; total request limit is 1 MiB.
 
 ```json
-{"messageId":"msg_...","status":"waiting"}
+{"messageId":"msg_...","status":"pending"}
 ```
 
-The unique constraint is `(topic_id, unique_id)`; topic identity includes the environment. Same key and same normalized payload/time returns the existing message even after cancellation/completion. Different parameters return HTTP 409. JSON key order is ignored; JSON numeric token representations such as `1` versus `1.0` are distinct. Dedupe records are not automatically purged.
+The unique constraint is `(topic_id, unique_id)`; topic identity includes the environment. Repeated submissions with the same key return success and the original message ID/current status, regardless of differences in valid payload/time parameters. The original payload and time are never overwritten, including after completion, failure or cancellation. A genuinely new message requires a new key. Dedupe records are not automatically purged. This submission idempotency is provided by this service, not a guarantee of RocketMQ message keys.
 
 The callback body is exactly the payload's JSON value; no envelope or message-ID header is forced. Whitespace/key order may be normalized. Unlike periodic templates, literal UUID placeholders in one-time payloads are not expanded. Consumer deduplication is entirely the business's responsibility.
 
 ## Query, cancel, retry
 
-- `GET /messages`: `topic`, `status`, `limit` (1–200, default 100), `before` (RFC3339), `beforeId` (tie-breaker) filters. Returns `{"items":[...]}`. For next page pass the last item's `createdAt` and `id` as `before`/`beforeId`.
+- `GET /messages`: `topic`, `status`, `result`, `limit` (1–200, default 100), `before` (RFC3339), `beforeId` (tie-breaker) filters. Returns `{"items":[...]}`. For next page pass the last item's `createdAt` and `id` as `before`/`beforeId`.
 - `GET /messages/{messageId}`: state, original payload/time, attempts, next available time, last HTTP status/error/response. Environment checked.
-- `POST /messages/{messageId}/cancel`: waiting/ready only. Duplicate cancellation succeeds; delivering or terminal states return 409. Cannot revoke a callback already claimed.
-- `POST /messages/{messageId}/retry`: failed only; resets attempt budget for the same immutable message, not a new send. Administrative action; may repeat business side effects.
+- `POST /messages/{messageId}/cancel`: pending only. Duplicate cancellation succeeds; delivering or terminal states return 409. Cannot revoke a callback already claimed.
+- `POST /messages/{messageId}/retry`: completed + failed only; creates a new message with a fresh attempt budget and an internal unique key. Returns `{ "messageId": "msg_...", "status": "pending" }`. Preserves the original failure and sets its `redeliveredAs`; repeating the same action returns that same new record. To redeliver again, use the latest failed record. Administrative action; may repeat business side effects.
 
-States: `waiting → ready → delivering → delivered`; transient failure returns to `waiting`; retry exhaustion/permanent failure becomes `failed`; cancellation becomes `cancelled`.
+States: `pending → delivering → completed`. Retrying stays `delivering`, with `availableAt` for the next attempt and no active lease while waiting. Completed records carry `result=success|failed|cancelled`. The failure queue is the filtered view `status=completed&result=failed`, exposed in the UI under 定时消息 → 失败队列.
 
-2xx acknowledges success. Network/read failures, 408, 429 and 5xx retry; other responses fail. Redirects are not followed. Backoff is 5/10/20/40/80 seconds (capped at 80). Timeout/response loss can cause duplicates. Each claimed attempt gets a lease token; stale workers cannot overwrite a later attempt. Expired leases are retried up to the configured budget.
+2xx acknowledges success. All unsuccessful HTTP attempts, including 4xx, network failures and response-read failures, retry. Redirects are not followed. Topic `maxAttempts` defaults to **16 total attempts including the first**, configurable 1–20. After failed attempt n, wait `5 × 2^(n−1)` seconds; there is no delay cap. With 16 attempts, 15 waits sum to **45h 30m 35s**, plus request duration and scheduling latency. After the final failure, the message enters the failure queue. No automatic further retries.
+
+Due messages are claimed directly by available workers (idle polling every 300 ms). The default pool has 8 concurrent workers shared with periodic deliveries. No FIFO ordering is promised: an in-flight message does not block another when a worker is available; retry waits release workers. All workers busy or sustained overload can still delay delivery. `runAt` is earliest eligibility, not an exact execution guarantee. Disabled Topics retain messages without delivering them.
+
+Timeout/response loss can cause duplicates. Each attempt has a lease token; stale workers cannot overwrite a later attempt. Expired leases consume an attempt and use the same exponential backoff and total budget. Receivers must handle duplicate business execution. Stop the old dispatcher before upgrading: startup migrates only Topic-backed message states; legacy periodic/managed states and retry policies remain unchanged.
 
 ## Old API retained
 

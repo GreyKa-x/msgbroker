@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-context"><a href="/messages?environment={{ active_environment }}">← 定时消息</a><span>{{ active_environment }}</span></div>
-<section class="section-header"><div><h1>创建消息</h1><p>选择 Topic，填写消息内容和投递时间。</p></div></section>
+<section class="section-header"><div><h1>创建消息</h1><p>选择 Topic，填写消息内容和投递时间。同一 Topic 的 Unique ID 重复时返回原消息，不覆盖。</p></div></section>
 {% if error %}<div class="alert">{{ error }}</div>{% endif %}
 {% if not topics %}<div class="note">当前环境还没有 Topic，请先<a href="/topics?environment={{ active_environment }}">配置 Topic</a>。</div>{% endif %}
 <form class="form panel" method="post" action="/messages">

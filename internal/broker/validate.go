@@ -3,7 +3,6 @@ package broker
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -81,7 +80,7 @@ func ValidateTopic(t *Topic) error {
 		t.TimeoutSeconds = 10
 	}
 	if t.MaxAttempts == 0 {
-		t.MaxAttempts = 5
+		t.MaxAttempts = 16
 	}
 	if t.TimeoutSeconds < 1 || t.TimeoutSeconds > 120 || t.MaxAttempts < 1 || t.MaxAttempts > 20 {
 		return fmt.Errorf("timeout must be 1..120 seconds; attempts 1..20")
@@ -107,10 +106,6 @@ func httpToken(s string) bool {
 		}
 	}
 	return true
-}
-func fingerprint(r SendRequest) string {
-	sum := sha256.Sum256(append([]byte(r.RunAt.UTC().Format(time.RFC3339Nano)+"\n"), r.Payload...))
-	return hex.EncodeToString(sum[:])
 }
 
 // New rules use standard cron semantics (Sunday=0; restricted DOM/DOW use OR).

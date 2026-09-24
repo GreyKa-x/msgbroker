@@ -6,55 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 )
 
-func (s *Store) Send(ctx context.Context, env string, r SendRequest) (Message, error) {
-	if !ValidEnvironment(env) || strings.TrimSpace(r.UniqueID) == "" || len([]rune(r.UniqueID)) > 160 || strings.HasPrefix(r.UniqueID, "__schedule:") {
-		return Message{}, fmt.Errorf("invalid environment or uniqueId")
-	}
-	if r.RunAt.IsZero() {
-		return Message{}, fmt.Errorf("runAt required")
-	}
-	r.RunAt = r.RunAt.UTC().Truncate(time.Microsecond)
-	var e error
-	r.Payload, e = CanonicalJSON(r.Payload)
-	if e != nil {
-		return Message{}, e
-	}
-	var id string
-	e = s.tx(ctx, func(tx *sql.Tx) error {
-		var topicID string
-		if e := tx.QueryRowContext(ctx, "SELECT id FROM topics WHERE environment=? AND name=?", env, r.Topic).Scan(&topicID); e != nil {
-			return missing(e)
-		}
-		id = ID("msg_")
-		_, err := tx.ExecContext(ctx, "INSERT INTO messages(id,topic_id,unique_id,request_hash,payload,run_at,status,last_error,response_body,created_at,callback_url,callback_method,callback_headers) VALUES (?,?,?,?,?,?,'waiting','','',?,'','','{}')", id, topicID, r.UniqueID, fingerprint(r), string(r.Payload), r.RunAt, time.Now().UTC())
-		if duplicate(err) {
-			var hash string
-			if err = tx.QueryRowContext(ctx, "SELECT id,request_hash FROM messages WHERE topic_id=? AND unique_id=?", topicID, r.UniqueID).Scan(&id, &hash); err != nil {
-				return err
-			}
-			if hash != fingerprint(r) {
-				return fmt.Errorf("%w: uniqueId already used with different parameters", ErrConflict)
-			}
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		_, err = tx.ExecContext(ctx, "INSERT INTO message_waits(message_id,available_at) VALUES (?,?)", id, r.RunAt)
-		return err
-	})
-	if e != nil {
-		return Message{}, e
-	}
-	return s.Message(ctx, env, id)
-}
 func messageRow(r Row) Message {
 	b := json.RawMessage(Str(r["payload"]))
-	m := Message{ID: Str(r["id"]), Environment: Str(r["environment"]), Topic: Str(r["topic"]), UniqueID: Str(r["unique_id"]), Payload: b, RunAt: Time(r["run_at"]), Status: Str(r["status"]), Attempts: int(Int(r["attempts"])), LeaseToken: Str(r["lease_token"]), HTTPStatus: int(Int(r["http_status"])), Error: Str(r["last_error"]), Response: Str(r["response_body"]), CreatedAt: Time(r["created_at"])}
+	m := Message{ID: Str(r["id"]), Environment: Str(r["environment"]), Topic: Str(r["topic"]), UniqueID: Str(r["unique_id"]), Payload: b, RunAt: Time(r["run_at"]), Status: Str(r["status"]), Attempts: int(Int(r["attempts"])), LeaseToken: Str(r["lease_token"]), HTTPStatus: int(Int(r["http_status"])), Error: Str(r["last_error"]), Response: Str(r["response_body"]), CreatedAt: Time(r["created_at"]), Result: Str(r["result"]), RedeliveredAs: Str(r["redelivered_as"])}
+	if r["updated_at"] != nil {
+		t := Time(r["updated_at"])
+		m.UpdatedAt = &t
+	}
 	if r["available_at"] != nil {
 		t := Time(r["available_at"])
 		m.AvailableAt = &t
@@ -95,6 +56,10 @@ func (s *Store) Messages(ctx context.Context, env string, f MessageFilter) ([]Me
 		q += " AND t.name=?"
 		a = append(a, f.Topic)
 	}
+	if f.Result != "" {
+		q += " AND m.result=?"
+		a = append(a, f.Result)
+	}
 	if f.Status != "" {
 		q += " AND m.status=?"
 		a = append(a, f.Status)
@@ -120,43 +85,6 @@ func (s *Store) Messages(ctx context.Context, env string, f MessageFilter) ([]Me
 		out = append(out, messageRow(r))
 	}
 	return out, e
-}
-func (s *Store) Cancel(ctx context.Context, env, id string) error {
-	return s.tx(ctx, func(tx *sql.Tx) error {
-		r, e := one(ctx, tx, "SELECT m.status,m.job_id FROM messages m JOIN topics t ON t.id=m.topic_id WHERE m.id=? AND t.environment=? FOR UPDATE", id, env)
-		if e != nil {
-			return e
-		}
-		status := Str(r["status"])
-		if status == "cancelled" {
-			return nil
-		}
-		if status != "waiting" && status != "ready" {
-			return ErrConflict
-		}
-		if _, e = tx.ExecContext(ctx, "UPDATE messages SET status='cancelled',finished_at=? WHERE id=?", time.Now().UTC(), id); e != nil {
-			return e
-		}
-		_, e = tx.ExecContext(ctx, "DELETE FROM message_waits WHERE message_id=?", id)
-		return e
-	})
-}
-func (s *Store) Retry(ctx context.Context, env, id string) error {
-	return s.tx(ctx, func(tx *sql.Tx) error {
-		r, e := one(ctx, tx, "SELECT m.status FROM messages m JOIN topics t ON t.id=m.topic_id WHERE m.id=? AND t.environment=? FOR UPDATE", id, env)
-		if e != nil {
-			return e
-		}
-		if Str(r["status"]) != "failed" {
-			return ErrConflict
-		}
-		_, e = tx.ExecContext(ctx, "UPDATE messages SET status='waiting',attempts=0,finished_at=NULL,last_error='',lease_token='',lease_until=NULL WHERE id=?", id)
-		if e != nil {
-			return e
-		}
-		_, e = tx.ExecContext(ctx, "INSERT INTO message_waits(message_id,available_at) VALUES (?,?) ON DUPLICATE KEY UPDATE available_at=VALUES(available_at)", id, time.Now().UTC())
-		return e
-	})
 }
 func ensureJobMessage(ctx context.Context, tx *sql.Tx, j Row) error {
 	if !Bool(j["enabled"]) || Str(j["managed_key"]) != "" || j["broker_next_at"] == nil {
@@ -211,7 +139,7 @@ func (s *Store) BootstrapJobs(ctx context.Context) error {
 	return nil
 }
 func (s *Store) Promote(ctx context.Context, now time.Time) error {
-	candidates, e := Rows(ctx, s.DB, "SELECT message_id FROM message_waits WHERE available_at<=? ORDER BY available_at,message_id LIMIT 100", now)
+	candidates, e := Rows(ctx, s.DB, "SELECT w.message_id FROM message_waits w JOIN messages m ON m.id=w.message_id WHERE m.topic_id IS NULL AND w.available_at<=? ORDER BY w.available_at,w.message_id LIMIT 100", now)
 	if e != nil {
 		return e
 	}

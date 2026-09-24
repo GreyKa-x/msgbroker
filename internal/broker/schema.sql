@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS messages (
  callback_url TEXT NOT NULL, callback_method VARCHAR(8) NOT NULL, callback_headers TEXT NOT NULL, preflight BOOLEAN NOT NULL DEFAULT FALSE,
  payload MEDIUMTEXT NOT NULL, run_at DATETIME(6) NOT NULL,
  status VARCHAR(16) NOT NULL, attempts INT NOT NULL DEFAULT 0,
+ result VARCHAR(16) NOT NULL DEFAULT '', updated_at DATETIME(6) NULL,
+ redelivered_as VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NULL,
  lease_token VARCHAR(40) NOT NULL DEFAULT '', lease_until DATETIME(6) NULL,
  http_status INT NOT NULL DEFAULT 0, last_error TEXT NOT NULL, response_body TEXT NOT NULL,
  created_at DATETIME(6) NOT NULL, finished_at DATETIME(6) NULL,

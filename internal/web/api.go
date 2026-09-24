@@ -246,7 +246,13 @@ func (s *Server) messagesAPI(w http.ResponseWriter, r *http.Request, p []string)
 			case "cancel":
 				e = s.Store.Cancel(ctx, env, p[3])
 			case "retry":
-				e = s.Store.Retry(ctx, env, p[3])
+				m, err := s.Store.Redeliver(ctx, env, p[3])
+				if err != nil {
+					fail(w, err)
+					return
+				}
+				write(w, 200, map[string]any{"messageId": m.ID, "status": m.Status})
+				return
 			default:
 				http.NotFound(w, r)
 				return
@@ -264,7 +270,7 @@ func (s *Server) messagesAPI(w http.ResponseWriter, r *http.Request, p []string)
 func filter(r *http.Request) broker.MessageFilter {
 	q := r.URL.Query()
 	before, _ := time.Parse(time.RFC3339Nano, q.Get("before"))
-	return broker.MessageFilter{OnlyTimed: true, BeforeID: q.Get("beforeId"), Topic: q.Get("topic"), Status: q.Get("status"), ScheduleID: q.Get("jobId"), Limit: number(q.Get("limit"), 100), Before: before}
+	return broker.MessageFilter{OnlyTimed: true, BeforeID: q.Get("beforeId"), Topic: q.Get("topic"), Status: q.Get("status"), Result: q.Get("result"), ScheduleID: q.Get("jobId"), Limit: number(q.Get("limit"), 100), Before: before}
 }
 func (s *Server) managedAPI(w http.ResponseWriter, r *http.Request, p []string) {
 	ctx := r.Context()

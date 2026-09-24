@@ -188,7 +188,7 @@ func TestColdRestartDeliversPersistedTimedMessage(t *testing.T) {
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		v, _ := s.Message(ctx, "test", m.ID)
-		if v.Status == "delivered" {
+		if v.Status == "completed" && v.Result == "success" {
 			cancel()
 			<-done
 			return

@@ -83,7 +83,10 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 func (e *Engine) Claim(ctx context.Context, id string) (*Delivery, error) {
-	q := "SELECT m.id,m.job_id FROM messages m LEFT JOIN topics t ON t.id=m.topic_id WHERE m.status='ready' AND (m.topic_id IS NULL OR t.enabled=TRUE)"
+	if d, err := e.claimTimer(ctx, id); err != nil || d != nil {
+		return d, err
+	}
+	q := "SELECT m.id,m.job_id FROM messages m LEFT JOIN topics t ON t.id=m.topic_id WHERE m.status='ready' AND m.topic_id IS NULL"
 	args := []any{}
 	if id != "" {
 		q += " AND m.id=?"
@@ -206,7 +209,7 @@ func (e *Engine) Deliver(ctx context.Context, d *Delivery) {
 			requestBody = nil
 		}
 		status, body, reason = e.request(ctx, d.Topic.Method, d.Topic.URL, d.Topic.Headers, requestBody, d.Topic.TimeoutSeconds)
-		retry = status == 0 || status == 408 || status == 429 || status >= 500
+		retry = d.Message["topic_id"] != nil || status == 0 || status == 408 || status == 429 || status >= 500
 	}
 	if err := e.finish(ctx, d, status, body, reason, retry); err != nil {
 		slog.Error("delivery confirmation failed", "messageId", d.Message["id"])
@@ -248,6 +251,9 @@ func (e *Engine) request(ctx context.Context, method, url string, headers map[st
 	return resp.StatusCode, text, fmt.Sprintf("HTTP %d", resp.StatusCode)
 }
 func (e *Engine) finish(ctx context.Context, d *Delivery, status int, body, reason string, retry bool) error {
+	if d.Message["topic_id"] != nil {
+		return e.finishTimer(ctx, d, status, body, reason)
+	}
 	return e.Store.tx(ctx, func(tx *sql.Tx) error {
 		if d.Message["job_id"] != nil {
 			if _, er := one(ctx, tx, "SELECT id FROM jobs WHERE id=? FOR UPDATE", d.Message["job_id"]); er != nil {
@@ -293,7 +299,10 @@ func (e *Engine) finish(ctx context.Context, d *Delivery, status int, body, reas
 	})
 }
 func (e *Engine) Recover(ctx context.Context, now time.Time) error {
-	rows, err := Rows(ctx, e.Store.DB, "SELECT id,job_id FROM messages WHERE status='delivering' AND lease_until<=? LIMIT 100", now)
+	if err := e.recoverTimers(ctx, now); err != nil {
+		return err
+	}
+	rows, err := Rows(ctx, e.Store.DB, "SELECT id,job_id FROM messages WHERE topic_id IS NULL AND status='delivering' AND lease_until<=? LIMIT 100", now)
 	if err != nil {
 		return err
 	}

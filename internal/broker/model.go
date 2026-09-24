@@ -41,6 +41,9 @@ type Message struct {
 	RunAt           time.Time       `json:"runAt"`
 	AvailableAt     *time.Time      `json:"availableAt,omitempty"`
 	Status          string          `json:"status"`
+	Result          string          `json:"result,omitempty"`
+	UpdatedAt       *time.Time      `json:"updatedAt,omitempty"`
+	RedeliveredAs   string          `json:"redeliveredAs,omitempty"`
 	Attempts        int             `json:"attempts"`
 	LeaseToken      string          `json:"-"`
 	LeaseUntil      *time.Time      `json:"leaseUntil,omitempty"`
@@ -59,6 +62,7 @@ type MessageFilter struct {
 	BeforeID   string
 	Topic      string
 	Status     string
+	Result     string
 	ScheduleID string
 	Limit      int
 	Before     time.Time

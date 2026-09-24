@@ -66,15 +66,15 @@ func TestConcurrentSendAndImmutableID(t *testing.T) {
 			t.Fatal("duplicate created")
 		}
 	}
-	_, e := s.Send(ctx, "test", broker.SendRequest{Topic: "test", UniqueID: "same", RunAt: at, Payload: json.RawMessage(`{"a":3}`)})
-	if !errors.Is(e, broker.ErrConflict) {
-		t.Fatal(e)
+	dup, e := s.Send(ctx, "test", broker.SendRequest{Topic: "test", UniqueID: "same", RunAt: at.Add(time.Hour), Payload: json.RawMessage(`{"a":3}`)})
+	if e != nil || dup.ID != first || string(dup.Payload) != `{"a":1,"b":2}` || !dup.RunAt.Equal(at.UTC().Truncate(time.Microsecond)) {
+		t.Fatalf("immutable duplicate: %+v %v", dup, e)
 	}
 	if e = s.Cancel(ctx, "test", first); e != nil {
 		t.Fatal(e)
 	}
 	m, e := s.Send(ctx, "test", broker.SendRequest{Topic: "test", UniqueID: "same", RunAt: at, Payload: json.RawMessage(`{"a":1,"b":2}`)})
-	if e != nil || m.ID != first || m.Status != "cancelled" {
+	if e != nil || m.ID != first || m.Status != "completed" || m.Result != "cancelled" {
 		t.Fatalf("%+v %v", m, e)
 	}
 	if _, e = s.Message(ctx, "prod", first); !errors.Is(e, broker.ErrNotFound) {
@@ -117,10 +117,10 @@ func TestDeliveryRetryRawPayloadAndLease(t *testing.T) {
 	}
 	e.Deliver(ctx, d)
 	m, _ = s.Message(ctx, "test", m.ID)
-	if m.Status != "waiting" || m.Attempts != 1 {
+	if m.Status != "delivering" || m.Attempts != 1 {
 		t.Fatalf("%+v", m)
 	}
-	if err = s.Promote(ctx, time.Now().Add(time.Minute)); err != nil {
+	if _, err = s.DB.Exec("UPDATE message_waits SET available_at=UTC_TIMESTAMP(6) WHERE message_id=?", m.ID); err != nil {
 		t.Fatal(err)
 	}
 	d2, err := e.Claim(ctx, m.ID)
@@ -129,12 +129,12 @@ func TestDeliveryRetryRawPayloadAndLease(t *testing.T) {
 	}
 	e.Deliver(ctx, d2)
 	m, _ = s.Message(ctx, "test", m.ID)
-	if m.Status != "delivered" || calls.Load() != 2 {
+	if m.Status != "completed" || m.Result != "success" || calls.Load() != 2 {
 		t.Fatalf("%+v", m)
 	}
 	e.Deliver(ctx, d)
 	m, _ = s.Message(ctx, "test", m.ID)
-	if m.Status != "delivered" {
+	if m.Status != "completed" || m.Result != "success" {
 		t.Fatal("stale worker overwrote state")
 	}
 }
@@ -164,6 +164,9 @@ func TestLeaseRecoveryAndMultipleWorkers(t *testing.T) {
 		t.Fatal(wins.Load())
 	}
 	if err := e.Recover(ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.Exec("UPDATE message_waits SET available_at=UTC_TIMESTAMP(6) WHERE message_id=?", m.ID); err != nil {
 		t.Fatal(err)
 	}
 	d, err := e.Claim(ctx, m.ID)

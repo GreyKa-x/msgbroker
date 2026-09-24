@@ -78,7 +78,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 			}
 		}
 	}
-	return nil
+	return s.upgradeTimers(ctx, c)
 }
 func (s *Store) tx(ctx context.Context, f func(*sql.Tx) error) error {
 	t, e := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})

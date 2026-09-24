@@ -24,9 +24,9 @@ legacy jobs / cron ── generate next occurrence ──┐
 external HTTP API ── topic + uniqueId + runAt ───┘
 ```
 
-A periodic occurrence rolls its next message forward when it becomes ready, in the same transaction, not when its callback finishes. Original cron jobs retain HEAD preflight, max-one-in-flight per job, the 30-second misfire grace and single-attempt behavior. A stopped process resumes persisted plans and skips obsolete cron occurrences, without replaying every missed interval. One-time messages remain pending until delivered/cancelled/exhausted; late one-time messages are not discarded.
+A periodic occurrence rolls its next message forward when it becomes ready, in the same transaction, not when its callback finishes. Original cron jobs retain HEAD preflight, max-one-in-flight per job, the 30-second misfire grace and single-attempt behavior. A stopped process resumes persisted plans and skips obsolete cron occurrences, without replaying every missed interval. Timed messages move from pending to delivering (including retry waits) to completed with a success/failed/cancelled result; late messages are not discarded.
 
-`(topic_id, unique_id)` guarantees creation idempotency. HTTP delivery is at-least-once within the configured retry budget. Consumers own business idempotency using their payload. A 2xx acknowledges receipt, not completion of asynchronous business work. Topics may share a URL, but the body is always the payload with no wrapper or required message-ID header.
+`(topic_id, unique_id)` guarantees creation idempotency: duplicate submissions return the original message without comparing or replacing its payload/time. Defaults are 16 total attempts with uncapped exponential waits starting at 5 seconds. Failed messages are retained in the failure queue for manual redelivery. HTTP delivery is at-least-once within the configured retry budget. Consumers own business idempotency using their payload. A 2xx acknowledges receipt, not completion of asynchronous business work. Topics may share a URL, but the body is always the payload with no wrapper or required message-ID header.
 
 ## Compatibility and rollout
 

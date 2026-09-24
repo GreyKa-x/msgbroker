@@ -222,7 +222,7 @@ func (s *Server) messagePages(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if r.Method == "POST" {
 		if tab == "topics" {
-			t := broker.Topic{Environment: environment, Name: r.FormValue("name"), URL: r.FormValue("url"), Method: r.FormValue("method"), Enabled: r.FormValue("enabled") == "true", HealthURL: r.FormValue("healthUrl"), TimeoutSeconds: number(r.FormValue("timeoutSeconds"), 10), MaxAttempts: number(r.FormValue("maxAttempts"), 5)}
+			t := broker.Topic{Environment: environment, Name: r.FormValue("name"), URL: r.FormValue("url"), Method: r.FormValue("method"), Enabled: r.FormValue("enabled") == "true", HealthURL: r.FormValue("healthUrl"), TimeoutSeconds: number(r.FormValue("timeoutSeconds"), 10), MaxAttempts: number(r.FormValue("maxAttempts"), 16)}
 			if h := r.FormValue("headers"); strings.TrimSpace(h) != "" {
 				t.Headers, err = parseHeaders(h)
 			}
@@ -245,7 +245,7 @@ func (s *Server) messagePages(w http.ResponseWriter, r *http.Request) {
 			case "cancel":
 				err = s.Store.Cancel(ctx, environment, p[0])
 			case "retry":
-				err = s.Store.Retry(ctx, environment, p[0])
+				_, err = s.Store.Redeliver(ctx, environment, p[0])
 			default:
 				http.NotFound(w, r)
 				return
@@ -300,6 +300,15 @@ func (s *Server) messagePages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := filter(r)
+	if r.URL.Path == "/messages/failed" {
+		f.Status = "completed"
+		f.Result = "failed"
+		data["tab"] = "failed"
+	}
+	data["list_path"] = "/messages"
+	if r.URL.Path == "/messages/failed" {
+		data["list_path"] = "/messages/failed"
+	}
 	msgs, e := s.Store.Messages(ctx, environment, f)
 	if e != nil {
 		fail(w, e)
