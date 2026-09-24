@@ -220,3 +220,33 @@ func TestLegacySchemaWithoutServerDefaults(t *testing.T) {
 		t.Fatal(rec)
 	}
 }
+
+func TestLegacyEnvironmentCollationDiffersFromTopics(t *testing.T) {
+	s := testutil.DB(t)
+	for _, q := range []string{
+		"ALTER TABLE jobs MODIFY environment VARCHAR(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL",
+		"ALTER TABLE topics MODIFY environment VARCHAR(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL",
+	} {
+		if _, err := s.DB.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	topic(t, s, "http://localhost/callback")
+	m := send(t, s, "mixed-collation", time.Now().Add(time.Hour))
+	rows, err := s.Messages(ctx, "test", broker.MessageFilter{OnlyTimed: true})
+	if err != nil || len(rows) != 1 || rows[0].ID != m.ID {
+		t.Fatal(rows, err)
+	}
+	rows, err = s.Messages(ctx, "prod", broker.MessageFilter{})
+	if err != nil || len(rows) != 0 {
+		t.Fatal(rows, err)
+	}
+	id := job(t, s, "http://localhost/callback", true)
+	rows, err = s.Messages(ctx, "test", broker.MessageFilter{ScheduleID: broker.Str(id)})
+	if err != nil || len(rows) != 1 {
+		t.Fatal(rows, err)
+	}
+	if _, err = s.Message(ctx, "test", rows[0].ID); err != nil {
+		t.Fatal(err)
+	}
+}

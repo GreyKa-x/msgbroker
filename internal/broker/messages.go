@@ -76,7 +76,7 @@ func messageRow(r Row) Message {
 const messageSelect = "SELECT m.*,COALESCE(t.environment,j.environment) environment,COALESCE(t.name,CONCAT('job:',j.id)) topic,w.available_at FROM messages m LEFT JOIN topics t ON t.id=m.topic_id LEFT JOIN jobs j ON j.id=m.job_id LEFT JOIN message_waits w ON w.message_id=m.id "
 
 func (s *Store) Message(ctx context.Context, env, id string) (Message, error) {
-	r, e := one(ctx, s.DB, messageSelect+"WHERE m.id=? AND COALESCE(t.environment,j.environment)=?", id, env)
+	r, e := one(ctx, s.DB, messageSelect+"WHERE m.id=? AND (t.environment=? OR (t.id IS NULL AND j.environment=?))", id, env, env)
 	if e != nil {
 		return Message{}, e
 	}
@@ -86,8 +86,8 @@ func (s *Store) Messages(ctx context.Context, env string, f MessageFilter) ([]Me
 	if f.Limit <= 0 || f.Limit > 200 {
 		f.Limit = 100
 	}
-	q := messageSelect + "WHERE COALESCE(t.environment,j.environment)=?"
-	a := []any{env}
+	q := messageSelect + "WHERE (t.environment=? OR (t.id IS NULL AND j.environment=?))"
+	a := []any{env, env}
 	if f.OnlyTimed {
 		q += " AND m.job_id IS NULL"
 	}
