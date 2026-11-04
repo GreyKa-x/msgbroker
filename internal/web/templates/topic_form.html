@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-context"><a href="/topics?environment={{ active_environment }}">← Topic 配置</a><span>{{ active_environment }}</span></div>
+<section class="section-header"><div><h1>{{ '编辑 Topic' if is_edit else '创建 Topic' }}</h1><p>配置消息消费地址、请求参数和投递策略。</p></div></section>
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+<form class="form panel" method="post" action="/topics">
+<input type="hidden" name="environment" value="{{ active_environment }}">
+<input type="hidden" name="editing" value="{{ 'true' if is_edit else 'false' }}">
+<div class="grid two">
+<label>Topic 名称<input name="name" required value="{{ edit.name }}" {% if is_edit %}readonly{% endif %}></label>
+<label>消费 URL<input name="url" required value="{{ edit.url }}"></label>
+<label>请求方法<select name="method">{% for method in ('POST','GET','PUT','PATCH','DELETE','HEAD','OPTIONS') %}<option {% if method == edit.method %}selected{% endif %}>{{ method }}</option>{% endfor %}</select></label>
+<label>超时（秒）<input name="timeoutSeconds" type="number" min="1" max="120" value="{{ edit.timeoutSeconds if edit.timeoutSeconds else 10 }}"></label>
+<label>最多尝试次数<input name="maxAttempts" type="number" min="1" max="20" value="{{ edit.maxAttempts if edit.maxAttempts else 16 }}"></label>
+<label>可选 HEAD 探活地址<input name="healthUrl" value="{{ edit.healthUrl }}"></label>
+</div>
+<label>请求 Headers（JSON{% if is_edit %}；留空保留原配置，{} 清空{% endif %}）<textarea class="broker-json" name="headers" placeholder='{"Authorization":"Bearer ..."}'>{{ headers_input }}</textarea></label>
+<label class="check-row"><input name="enabled" type="checkbox" value="true" {% if not edit or edit.enabled %}checked{% endif %}>启用</label>
+<div class="page-actions"><button class="primary">{{ '保存 Topic' if is_edit else '创建 Topic' }}</button><a class="button" href="/topics?environment={{ active_environment }}">取消</a></div>
+</form>
+{% endblock %}

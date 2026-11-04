@@ -15,7 +15,7 @@ func (s *Server) html(w http.ResponseWriter, r *http.Request) {
 		s.home(w, r)
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/messages") || r.URL.Path == "/topics" {
+	if strings.HasPrefix(r.URL.Path, "/messages") || r.URL.Path == "/topics" || r.URL.Path == "/topics/new" {
 		s.messagePages(w, r)
 		return
 	}
@@ -216,7 +216,7 @@ func (s *Server) messagePages(w http.ResponseWriter, r *http.Request) {
 	environment := env(r)
 	ctx := r.Context()
 	tab := "messages"
-	if r.URL.Path == "/topics" {
+	if r.URL.Path == "/topics" || r.URL.Path == "/topics/new" {
 		tab = "topics"
 	}
 	var err error
@@ -272,16 +272,23 @@ func (s *Server) messagePages(w http.ResponseWriter, r *http.Request) {
 		code = 400
 	}
 	if tab == "topics" {
+		isForm := r.URL.Path == "/topics/new" || r.Method == "POST" || r.URL.Query().Get("edit") != ""
 		if r.Method == "POST" && err != nil {
 			data["edit"] = map[string]any{"name": r.FormValue("name"), "url": r.FormValue("url"), "method": r.FormValue("method"), "timeoutSeconds": r.FormValue("timeoutSeconds"), "maxAttempts": r.FormValue("maxAttempts"), "healthUrl": r.FormValue("healthUrl"), "enabled": r.FormValue("enabled") == "true"}
+			data["headers_input"] = r.FormValue("headers")
 		}
-		if name := r.URL.Query().Get("edit"); name != "" {
+		if name := r.URL.Query().Get("edit"); name != "" && r.Method == "GET" {
 			t, e := s.Store.Topic(ctx, environment, name)
 			if e != nil {
 				fail(w, e)
 				return
 			}
 			data["edit"] = mapJSON(broker.Redacted(t))
+		}
+		data["is_edit"] = r.URL.Query().Get("edit") != "" || r.FormValue("editing") == "true"
+		if isForm {
+			s.render(w, r, "topic_form.html", data, code)
+			return
 		}
 		s.render(w, r, "topics.html", data, code)
 		return

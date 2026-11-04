@@ -28,7 +28,7 @@ func TestTemplatesParseAndEscape(t *testing.T) {
 	if strings.Contains(text, "<script>alert(1)</script>") || !strings.Contains(text, "&lt;script&gt;") {
 		t.Fatal("unescaped job name")
 	}
-	for _, name := range []string{"messages.html", "message_form.html", "topics.html"} {
+	for _, name := range []string{"messages.html", "message_form.html", "topics.html", "topic_form.html"} {
 		w = httptest.NewRecorder()
 		s.render(w, r, name, map[string]any{"topics": []any{}, "messages": []any{}, "edit": map[string]any{}, "tab": "messages"}, 200)
 		if w.Code != 200 {
@@ -122,6 +122,64 @@ func TestRejectCrossOriginMutation(t *testing.T) {
 	}
 }
 
+func TestTopicListAndSeparateForm(t *testing.T) {
+	db := testutil.DB(t)
+	s, err := New(db, broker.NewEngine(db), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	get := func(path string) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
+		}
+		return w.Body.String()
+	}
+	post := func(form url.Values) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodPost, "/topics", strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	list := get("/topics?environment=test")
+	if !strings.Contains(list, "/topics/new?environment=test") || strings.Contains(list, `name="name"`) {
+		t.Fatal("topic list must link to a separate creation page")
+	}
+	if form := get("/topics/new?environment=test"); !strings.Contains(form, `name="name"`) || !strings.Contains(form, `name="environment" value="test"`) {
+		t.Fatal("creation form or environment missing")
+	}
+	form := url.Values{"environment": {"test"}, "name": {"wake"}, "url": {"http://localhost/callback"}, "method": {"POST"}, "enabled": {"true"}, "headers": {`{"Authorization":"Bearer private-test-value"}`}}
+	if w := post(form); w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), "environment=test") {
+		t.Fatalf("create: %d %s", w.Code, w.Body.String())
+	}
+	edit := get("/topics?environment=test&edit=wake")
+	if !strings.Contains(edit, "编辑 Topic") || !strings.Contains(edit, "readonly") || strings.Contains(edit, "private-test-value") {
+		t.Fatal("edit form missing or saved credentials exposed")
+	}
+	form.Set("editing", "true")
+	form.Set("headers", "")
+	form.Set("url", "invalid-url")
+	if w := post(form); w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `value="invalid-url"`) || !strings.Contains(w.Body.String(), "编辑 Topic") {
+		t.Fatalf("invalid edit must retain form: %d", w.Code)
+	}
+	form.Set("url", "http://localhost/updated")
+	if w := post(form); w.Code != http.StatusSeeOther {
+		t.Fatalf("edit: %d %s", w.Code, w.Body.String())
+	}
+	updated, err := db.Topic(context.Background(), "test", "wake")
+	if err != nil || updated.URL != "http://localhost/updated" || updated.Headers["Authorization"] != "Bearer private-test-value" {
+		t.Fatal("edit did not preserve callback configuration")
+	}
+	if strings.Contains(get("/topics?environment=prod"), "localhost/updated") {
+		t.Fatal("topic leaked across environments")
+	}
+}
+
 func TestManagedSchedulesRenderInLegacyList(t *testing.T) {
 	db := testutil.DB(t)
 	id, err := db.SaveJob(context.Background(), 0, broker.Row{"name": "Managed schedule", "environment": "test", "cron_expression": "0 0 * * *", "execute_method": "POST", "execute_url": "http://localhost/task", "execute_headers": "{}", "execute_body": "{}", "enabled": false})
@@ -158,7 +216,7 @@ func TestJinjaFallbackValuesPreserveDisplay(t *testing.T) {
 		want []string
 	}{
 		{"executions.html", map[string]any{"job": htmlJob(broker.Row{"id": int64(1), "environment": "test", "name": "fixture"}), "executions": []broker.Row{htmlExecution(broker.Row{"status": "failed", "status_code": 503, "error_message": "callback unavailable", "finished_at": time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)})}}, []string{"<td>503</td>", "callback unavailable", "2026-09-24 00:00:00"}},
-		{"topics.html", map[string]any{"tab": "topics", "edit": map[string]any{}}, []string{`value="10"`, `value="16"`}},
+		{"topic_form.html", map[string]any{"tab": "topics", "edit": map[string]any{}}, []string{`value="10"`, `value="16"`}},
 		{"message_form.html", map[string]any{"tab": "messages", "payload": "{}"}, []string{`name="payload" required>{}</textarea>`}},
 	}
 	for _, c := range cases {
