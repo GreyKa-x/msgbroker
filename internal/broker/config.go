@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const DefaultDeliveryWorkers = 256
+const DefaultDeliveryWorkers = 1024
 
 func ParseDeliveryWorkers(raw string) (int, error) {
 	raw = strings.TrimSpace(raw)
