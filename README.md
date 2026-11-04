@@ -14,6 +14,8 @@ go run ./cmd/msgbroker
 
 The service listens on `:8000`; templates and assets are embedded. `GET /healthz` checks the database. `DISPATCH_ENABLED=false` disables all background dispatch and health jobs for review; explicit manual/API mutations still work. Do not point a review instance at a production database: startup performs additive migrations.
 
+One dispatcher checks due work every second. `DELIVERY_WORKERS` configures concurrent HTTP deliveries (positive integer, default `8`); changing it requires a restart. Delivery workers do not poll the database, and the dispatcher only claims messages for available workers, so waiting messages remain persisted without starting their delivery lease early.
+
 The old `/`, `/jobs/*`, `/static/*`, and `/openplatform/v1/jobs/*` routes remain. Templates, styles and the UUID-at-cursor behavior are retained from JobScheduler; navigation adds 定时消息 and Topic 配置. The new API is documented in [docs/api.md](docs/api.md).
 
 ## Model

@@ -41,6 +41,10 @@ func main() {
 	}
 }
 func run() error {
+	workers, err := broker.ParseDeliveryWorkers(os.Getenv("DELIVERY_WORKERS"))
+	if err != nil {
+		return err
+	}
 	dsn, err := broker.DatabaseDSN(os.Getenv("MYSQL_DSN"), os.Getenv("DATABASE_URL"))
 	if err != nil {
 		return err
@@ -56,6 +60,7 @@ func run() error {
 		return err
 	}
 	engine := broker.NewEngine(store)
+	engine.Workers = workers
 	server, err := web.New(store, engine, os.Getenv("AGENT_API_TOKEN"))
 	if err != nil {
 		return err

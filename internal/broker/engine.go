@@ -26,27 +26,32 @@ type Engine struct {
 }
 
 func NewEngine(s *Store) *Engine {
-	return &Engine{Store: s, Workers: 8, Client: &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	return &Engine{Store: s, Workers: DefaultDeliveryWorkers, Client: &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 }
 func (e *Engine) Run(ctx context.Context) {
+	workers := e.Workers
+	if workers < 1 {
+		workers = DefaultDeliveryWorkers
+	}
+	deliveries := make(chan *Delivery)
+	available := make(chan struct{}, workers)
 	var wg sync.WaitGroup
-	for i := 0; i < e.Workers; i++ {
+	for i := 0; i < workers; i++ {
+		available <- struct{}{}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for ctx.Err() == nil {
-				d, err := e.Claim(ctx, "")
-				if err != nil {
-					slog.Error("claim failed", "error", err)
-				}
-				if d != nil {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case d := <-deliveries:
 					e.Deliver(ctx, d)
-					continue
 				}
 				select {
 				case <-ctx.Done():
 					return
-				case <-time.After(300 * time.Millisecond):
+				case available <- struct{}{}:
 				}
 			}
 		}()
@@ -73,6 +78,25 @@ func (e *Engine) Run(ctx context.Context) {
 		for _, fn := range []func() error{func() error { return e.Store.Promote(ctx, now) }, func() error { return e.Recover(ctx, now) }, func() error { return e.Store.DispatchManaged(ctx, now) }} {
 			if err := fn(); err != nil && ctx.Err() == nil {
 				slog.Error("dispatch failed", "error", err)
+			}
+		}
+		// Reserve idle delivery capacity before claiming; leased messages must not
+		// wait in an in-memory backlog while all HTTP workers are busy.
+		readyWorkers := len(available)
+		for i := 0; i < readyWorkers && ctx.Err() == nil; i++ {
+			<-available
+			d, err := e.Claim(ctx, "")
+			if err != nil || d == nil {
+				available <- struct{}{}
+				if err != nil && ctx.Err() == nil {
+					slog.Error("claim failed", "error", err)
+				}
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case deliveries <- d:
 			}
 		}
 		select {
