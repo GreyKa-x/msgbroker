@@ -21,7 +21,7 @@ func TestDeliveryWorkerConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		raw  string
 		want int
-	}{{"", 8}, {"  ", 8}, {"1", 1}, {" 12 ", 12}} {
+	}{{"", 256}, {"  ", 256}, {"1", 1}, {" 12 ", 12}} {
 		got, err := broker.ParseDeliveryWorkers(tc.raw)
 		if err != nil || got != tc.want {
 			t.Fatalf("%q: workers=%d err=%v", tc.raw, got, err)
